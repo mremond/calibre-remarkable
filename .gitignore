@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# AI tools
+.claude/
+.cursor/
+.aider/
+.copilot/
+
+# Calibre plugin build artifacts
+*.zip
+
+# Temporary files
+*.tmp
+*.temp
+*.log
