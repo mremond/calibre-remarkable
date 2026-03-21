@@ -64,6 +64,11 @@ html, body {{
   widows: 2;
   line-height: {line_height}%;
 }}
+blockquote, .quote, .epigraph, .pullquote {{
+  margin-left: 1.5em;
+  margin-right: 1.5em;
+  font-style: italic;
+}}
 '''
 
         recommendations = [

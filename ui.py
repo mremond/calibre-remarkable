@@ -1,13 +1,107 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from PyQt5.Qt import QMenu, QIcon, QProgressDialog, QApplication, Qt, QMessageBox
+from PyQt5.Qt import (QMenu, QIcon, QProgressDialog, QApplication, Qt,
+                       QMessageBox, QThread, pyqtSignal)
 
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2 import error_dialog, info_dialog
 
 from calibre_plugins.remarkable_sync.main import get_book_path
 from calibre_plugins.remarkable_sync.config import prefs
+
+
+class SendWorkerThread(QThread):
+    """Worker thread for sending books to reMarkable without blocking the UI."""
+
+    progress_update = pyqtSignal(int, str)  # (index, label_text)
+    book_finished = pyqtSignal(bool, str, object, int)  # (success, message, doc_uuid, book_id)
+    ask_existing = pyqtSignal(int, str, dict)  # (index, title, existing_doc)
+    all_done = pyqtSignal()
+
+    def __init__(self, books, folder_uuid, device_type, font_family, font_size,
+                 line_height, margin_left, margin_right, margin_top, margin_bottom,
+                 footer_template, auto_convert):
+        QThread.__init__(self)
+        self.books = books
+        self.folder_uuid = folder_uuid
+        self.device_type = device_type
+        self.font_family = font_family
+        self.font_size = font_size
+        self.line_height = line_height
+        self.margin_left = margin_left
+        self.margin_right = margin_right
+        self.margin_top = margin_top
+        self.margin_bottom = margin_bottom
+        self.footer_template = footer_template
+        self.auto_convert = auto_convert
+
+        self._cancelled = False
+        self._existing_reply = None  # Set by main thread via slot
+        self._waiting_for_reply = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def set_existing_reply(self, reply):
+        """Called from main thread to answer the existing-document question."""
+        self._existing_reply = reply
+        self._waiting_for_reply = False
+
+    def run(self):
+        from calibre_plugins.remarkable_sync.worker import process_single_book, check_existing_document
+
+        for i, book in enumerate(self.books):
+            if self._cancelled:
+                break
+
+            title = book['title']
+            self.progress_update.emit(i, f"Checking ({i+1}/{len(self.books)}): {title}")
+
+            # Check if document already exists
+            update_existing = False
+            existing_uuid = None
+            existing_doc = check_existing_document(title, self.folder_uuid)
+
+            if existing_doc:
+                # Ask the main thread what to do
+                self._waiting_for_reply = True
+                self._existing_reply = None
+                self.ask_existing.emit(i, title, existing_doc)
+
+                # Wait for the main thread to respond
+                while self._waiting_for_reply and not self._cancelled:
+                    self.msleep(50)
+
+                if self._cancelled:
+                    break
+
+                reply = self._existing_reply
+                if reply == 'cancel':
+                    break
+                elif reply == 'skip':
+                    self.book_finished.emit(False, 'skipped', None, book['book_id'])
+                    continue
+                else:  # 'update'
+                    update_existing = True
+                    existing_uuid = existing_doc['uuid']
+
+            self.progress_update.emit(i, f"Processing ({i+1}/{len(self.books)}): {title}")
+
+            success, message, doc_uuid = process_single_book(
+                book, self.folder_uuid, self.device_type, self.font_family,
+                self.font_size, self.line_height,
+                self.margin_left, self.margin_right, self.margin_top, self.margin_bottom,
+                self.footer_template, self.auto_convert,
+                update_existing=update_existing, existing_uuid=existing_uuid
+            )
+
+            self.book_finished.emit(success, message, doc_uuid, book['book_id'])
+
+            if self._cancelled:
+                break
+
+        self.all_done.emit()
 
 
 class ReMarkableSyncAction(InterfaceAction):
@@ -58,10 +152,9 @@ class ReMarkableSyncAction(InterfaceAction):
 
     def send_to_remarkable(self):
         """Send selected books to reMarkable"""
-        from calibre_plugins.remarkable_sync.worker import process_single_book, check_existing_document
         from calibre_plugins.remarkable_sync.remarkable import (
             check_remarkable_app_installed, is_remarkable_app_running,
-            stop_remarkable_app, start_remarkable_app
+            stop_remarkable_app
         )
 
         # Check if reMarkable app is installed
@@ -70,8 +163,8 @@ class ReMarkableSyncAction(InterfaceAction):
             return error_dialog(self.gui, 'reMarkable App Not Found', message, show=True)
 
         # Check if app was running (we'll restart it after sync)
-        app_was_running = is_remarkable_app_running()
-        if app_was_running:
+        self._app_was_running = is_remarkable_app_running()
+        if self._app_was_running:
             stop_remarkable_app()
 
         # Get selected book IDs
@@ -82,19 +175,18 @@ class ReMarkableSyncAction(InterfaceAction):
                                 'No books selected', show=True)
 
         # Get the database
-        db = self.gui.current_db.new_api
+        self._db = self.gui.current_db.new_api
 
         # Collect book info
         books = []
         for book_id in ids:
-            mi = db.get_metadata(book_id)
-            fmt, path = get_book_path(db, book_id)
+            mi = self._db.get_metadata(book_id)
+            fmt, path = get_book_path(self._db, book_id)
             if fmt and path:
                 # Format title as "Series-Number Title - Author"
                 author = mi.authors[0] if mi.authors else None
                 display_title = mi.title
                 if mi.series:
-                    # Format series index as integer if whole number, else keep decimal
                     idx = int(mi.series_index) if mi.series_index == int(mi.series_index) else mi.series_index
                     display_title = f"{mi.series}-{idx} {mi.title}"
                 if author:
@@ -125,92 +217,93 @@ class ReMarkableSyncAction(InterfaceAction):
         footer_template = prefs.get('pdf_footer_template', '')
         auto_convert = prefs.get('auto_convert_epub', True)
 
+        # Track results
+        self._success_count = 0
+        self._error_count = 0
+        self._skip_count = 0
+        self._messages = []
+
         # Create progress dialog
-        progress = QProgressDialog(
+        self._progress = QProgressDialog(
             'Sending books to reMarkable...',
             'Cancel',
             0, len(books),
             self.gui
         )
-        progress.setWindowTitle('reMarkable Sync')
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.setAutoClose(False)
-        progress.setAutoReset(False)
-        progress.show()
-        QApplication.processEvents()
+        self._progress.setWindowTitle('reMarkable Sync')
+        self._progress.setWindowModality(Qt.WindowModal)
+        self._progress.setMinimumDuration(0)
+        self._progress.setAutoClose(False)
+        self._progress.setAutoReset(False)
+        self._progress.show()
 
-        success_count = 0
-        error_count = 0
-        messages = []
+        # Create and start worker thread
+        self._worker = SendWorkerThread(
+            books, folder_uuid, device_type, font_family, font_size, line_height,
+            margin_left, margin_right, margin_top, margin_bottom,
+            footer_template, auto_convert
+        )
+        self._worker.progress_update.connect(self._on_progress_update)
+        self._worker.book_finished.connect(self._on_book_finished)
+        self._worker.ask_existing.connect(self._on_ask_existing)
+        self._worker.all_done.connect(self._on_all_done)
+        self._progress.canceled.connect(self._worker.cancel)
+        self._worker.start()
 
-        skip_count = 0
+    def _on_progress_update(self, index, label_text):
+        self._progress.setValue(index)
+        self._progress.setLabelText(label_text)
 
-        for i, book in enumerate(books):
-            if progress.wasCanceled():
-                messages.append('Operation cancelled by user')
-                break
+    def _on_book_finished(self, success, message, doc_uuid, book_id):
+        if message == 'skipped':
+            self._skip_count += 1
+            return
 
-            title = book['title']
-            progress.setLabelText(f"Checking ({i+1}/{len(books)}): {title}")
-            progress.setValue(i)
-            QApplication.processEvents()
+        if success:
+            self._success_count += 1
+            col_rm_uuid = prefs.get('col_rm_uuid', '')
+            if col_rm_uuid and doc_uuid:
+                try:
+                    self._db.set_field(col_rm_uuid, {book_id: doc_uuid})
+                except Exception:
+                    pass
+        else:
+            self._error_count += 1
+            self._messages.append(message)
 
-            # Check if document already exists
-            update_existing = False
-            existing_uuid = None
-            existing_doc = check_existing_document(title, folder_uuid)
+    def _on_ask_existing(self, index, title, existing_doc):
+        """Handle existing document question on main thread."""
+        self._progress.hide()
+        reply = QMessageBox.question(
+            self.gui,
+            'Document Exists',
+            f"'{title}' already exists on reMarkable.\n\n"
+            "Do you want to update it? (Only the PDF will be replaced, "
+            "annotations and reading position will be preserved.)",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes
+        )
+        self._progress.show()
 
-            if existing_doc:
-                progress.hide()
-                reply = QMessageBox.question(
-                    self.gui,
-                    'Document Exists',
-                    f"'{title}' already exists on reMarkable.\n\n"
-                    "Do you want to update it? (Only the PDF will be replaced, "
-                    "annotations and reading position will be preserved.)",
-                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-                    QMessageBox.Yes
-                )
-                progress.show()
-                QApplication.processEvents()
+        if reply == QMessageBox.Cancel:
+            self._worker.set_existing_reply('cancel')
+        elif reply == QMessageBox.No:
+            self._worker.set_existing_reply('skip')
+        else:
+            self._worker.set_existing_reply('update')
 
-                if reply == QMessageBox.Cancel:
-                    messages.append('Operation cancelled by user')
-                    break
-                elif reply == QMessageBox.No:
-                    skip_count += 1
-                    continue
-                else:
-                    update_existing = True
-                    existing_uuid = existing_doc['uuid']
+    def _on_all_done(self):
+        """Handle completion of all book processing."""
+        from calibre_plugins.remarkable_sync.remarkable import start_remarkable_app
 
-            progress.setLabelText(f"Processing ({i+1}/{len(books)}): {title}")
-            QApplication.processEvents()
+        self._progress.setValue(self._progress.maximum())
+        self._progress.close()
 
-            # Process book using fork_job (runs in separate process)
-            success, message, doc_uuid = process_single_book(
-                book, folder_uuid, device_type, font_family, font_size, line_height,
-                margin_left, margin_right, margin_top, margin_bottom,
-                footer_template, auto_convert,
-                update_existing=update_existing, existing_uuid=existing_uuid
-            )
-
-            if success:
-                success_count += 1
-                # Store reMarkable UUID in custom column if configured
-                col_rm_uuid = prefs.get('col_rm_uuid', '')
-                if col_rm_uuid and doc_uuid:
-                    try:
-                        db.set_field(col_rm_uuid, {book['book_id']: doc_uuid})
-                    except Exception:
-                        pass  # Don't fail the whole operation if UUID storage fails
-            else:
-                error_count += 1
-                messages.append(message)
-
-        progress.setValue(len(books))
-        progress.close()
+        success_count = self._success_count
+        error_count = self._error_count
+        skip_count = self._skip_count
+        messages = self._messages
+        app_was_running = self._app_was_running
 
         # Restart reMarkable app if it was running
         if app_was_running and success_count > 0:
@@ -234,14 +327,12 @@ class ReMarkableSyncAction(InterfaceAction):
 
             info_dialog(self.gui, 'Success', msg, show=True)
         elif skip_count > 0 and error_count == 0:
-            # Restart app even if only skipped (user might have updated)
             if app_was_running:
                 start_remarkable_app()
             info_dialog(self.gui, 'Skipped',
                         f"Skipped {skip_count} existing book(s). No new books sent.",
                         show=True)
         elif error_count > 0:
-            # Restart app even on errors
             if app_was_running:
                 start_remarkable_app()
             error_dialog(self.gui, 'Error',

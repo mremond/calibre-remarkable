@@ -16,7 +16,7 @@ prefs.defaults['default_folder_name'] = 'Root'
 prefs.defaults['device_type'] = 'rmpp'  # Default to Paper Pro
 prefs.defaults['auto_convert_epub'] = True
 prefs.defaults['pdf_font_family'] = ''  # Empty means use default
-prefs.defaults['pdf_font_size'] = 22.0  # In pixels (matching manual conversion)
+prefs.defaults['pdf_font_size'] = 24.0  # In pixels (matching manual conversion)
 prefs.defaults['pdf_line_height'] = 125  # percentage
 prefs.defaults['pdf_margin_left'] = 15
 prefs.defaults['pdf_margin_right'] = 15
@@ -36,7 +36,7 @@ prefs.defaults['col_page'] = ''  # Column for current page number
 prefs.defaults['col_last_read'] = ''  # Column for last read timestamp
 
 # Font sizes in pixels (matching Calibre's PDF output settings)
-RMPP_FONT_SIZES = [9.0, 11.0, 12.0, 13.0, 14.0, 17.0, 19.0, 21.0, 22.0]
+RMPP_FONT_SIZES = [9.0, 11.0, 12.0, 13.0, 14.0, 17.0, 19.0, 21.0, 22.0, 24.0, 28.0, 32.0]
 
 # Device types with their screen specifications
 # Format: (name, width_px, height_px, dpi)
