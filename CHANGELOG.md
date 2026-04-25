@@ -45,6 +45,4 @@ and syncs reading positions back to Calibre.
 - See the [README](README.md) for the full feature list, settings
   reference, and reading-position sync setup.
 
-Inspired by the [Remarcal](https://remarcal.net/) team's work.
-
 [1.0.0]: https://github.com/mremond/calibre-remarkable/releases/tag/v1.0.0
