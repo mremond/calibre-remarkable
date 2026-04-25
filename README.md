@@ -193,6 +193,12 @@ When sending EPUB files, the plugin converts them to PDF optimized for reMarkabl
 - **Margins**: Configurable for comfortable reading
 - **Full-bleed cover**: The cover image is extracted and added as the first page without margins, scaled to fit the page width and top-aligned. Any padding at the bottom uses the dominant color from the cover's edge for a seamless appearance.
 
+<p align="center">
+  <img src="images/screenshots/device.jpg" alt="A converted book displayed on a reMarkable Paper Pro Move" width="600">
+  <br>
+  <em>A converted EPUB displayed on a reMarkable Paper Pro Move.</em>
+</p>
+
 ## How It Works
 
 The plugin creates document files directly in the reMarkable desktop app's local storage:
