@@ -106,7 +106,7 @@ blockquote, .quote, .epigraph, .pullquote {{
 
         if os.path.exists(pdf_path):
             # Post-process: add full-bleed cover
-            make_cover_fullbleed(epub_path, pdf_path)
+            make_cover_fullbleed(epub_path, pdf_path, log)
             return {'success': True, 'pdf_path': pdf_path, 'error': ''}
         else:
             return {'success': False, 'pdf_path': None,
@@ -117,7 +117,54 @@ blockquote, .quote, .epigraph, .pullquote {{
         return {'success': False, 'pdf_path': None, 'error': traceback.format_exc()}
 
 
-def make_cover_fullbleed(epub_path, pdf_path):
+def _rasterize_svg_cover(svg_data, target_width):
+    """Rasterize SVG bytes to PNG bytes at *target_width* px wide.
+
+    Returns PNG bytes on success, or None if the SVG cannot be parsed.
+    """
+    from calibre.gui2 import ensure_app
+    from PyQt5.QtSvg import QSvgRenderer
+    from PyQt5.QtGui import QImage, QPainter
+    from PyQt5.QtCore import QByteArray, QBuffer, QIODevice
+
+    ensure_app()
+
+    renderer = QSvgRenderer(QByteArray(svg_data))
+    if not renderer.isValid():
+        return None
+
+    default_size = renderer.defaultSize()
+    if default_size.width() <= 0 or default_size.height() <= 0:
+        return None
+
+    aspect = default_size.height() / default_size.width()
+    width = max(1, int(target_width))
+    height = max(1, int(width * aspect))
+
+    image = QImage(width, height, QImage.Format_ARGB32)
+    image.fill(0xFFFFFFFF)
+    painter = QPainter(image)
+    try:
+        renderer.render(painter)
+    finally:
+        painter.end()
+
+    buf = QBuffer()
+    buf.open(QIODevice.WriteOnly)
+    image.save(buf, 'PNG')
+    return bytes(buf.data())
+
+
+def _looks_like_svg(name, data):
+    if name and name.lower().endswith('.svg'):
+        return True
+    head = data[:512].lstrip()
+    if head.startswith(b'<svg'):
+        return True
+    return head.startswith(b'<?xml') and b'<svg' in data[:2048]
+
+
+def make_cover_fullbleed(epub_path, pdf_path, log=None):
     """
     Add a full-bleed cover image as the first page of the PDF.
 
@@ -125,6 +172,9 @@ def make_cover_fullbleed(epub_path, pdf_path):
     (top-aligned with padding at bottom if needed), and inserts it
     as the first page of the PDF.
     """
+    if log is None:
+        from calibre.utils.logging import default_log as log
+
     try:
         from calibre.ebooks.oeb.polish.container import get_container
         from calibre.ebooks.oeb.polish.cover import find_cover_image
@@ -136,10 +186,12 @@ def make_cover_fullbleed(epub_path, pdf_path):
         container = get_container(epub_path)
         cover_name = find_cover_image(container)
         if not cover_name:
+            log('reMarkable Sync: no cover image found in EPUB; skipping cover page')
             return
 
         cover_data = container.raw_data(cover_name)
         if not cover_data:
+            log('reMarkable Sync: cover image %s is empty; skipping cover page' % cover_name)
             return
 
         # Load PDF to get page dimensions
@@ -152,6 +204,14 @@ def make_cover_fullbleed(epub_path, pdf_path):
 
         # Get first page dimensions (podofo uses 1-indexed page numbers)
         _, _, page_width, page_height = doc.get_page_box('MediaBox', 1)
+
+        # PIL can't open SVG; rasterize via Qt at the page width for crisp output
+        if _looks_like_svg(cover_name, cover_data):
+            rasterized = _rasterize_svg_cover(cover_data, page_width)
+            if rasterized is None:
+                log('reMarkable Sync: failed to rasterize SVG cover %s; skipping cover page' % cover_name)
+                return
+            cover_data = rasterized
 
         # Pre-process image: resize to fit page width, add padding at bottom
         img = Image.open(BytesIO(cover_data))
@@ -195,8 +255,9 @@ def make_cover_fullbleed(epub_path, pdf_path):
         os.replace(temp_pdf, pdf_path)
 
     except Exception:
-        # If anything fails, keep the original PDF (without cover)
-        pass
+        # Keep the original PDF (without cover) but surface the cause
+        import traceback
+        log('reMarkable Sync: cover insertion failed:\n%s' % traceback.format_exc())
 
 
 def check_existing_document(title, folder_uuid):
