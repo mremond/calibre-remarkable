@@ -11,6 +11,8 @@ BG = (0, 0, 0, 0)
 BEZEL = (40, 40, 40, 255)
 SCREEN = (245, 242, 232, 255)
 LINE = (70, 70, 70, 255)
+METAL_LIGHT = (210, 210, 212, 255)
+METAL_DARK = (150, 150, 154, 255)
 STYLUS_BODY = (30, 30, 30, 255)
 STYLUS_TIP = (200, 200, 200, 255)
 
@@ -24,16 +26,34 @@ def main():
     img = Image.new('RGBA', (SIZE, SIZE), BG)
     d = ImageDraw.Draw(img)
 
-    # Tablet body (portrait, thin bezels) — leave room on the right for stylus.
+    # Tablet body (portrait, rM2-style: wider left bezel, thin elsewhere).
     body_left, body_top, body_right, body_bottom = 18, 8, 92, 120
     rounded_rect(d, (body_left, body_top, body_right, body_bottom),
                  radius=8, fill=BEZEL)
 
-    # E-ink screen inset.
+    # E-ink screen — wider gap on the left to make room for the metal strip.
+    left_bezel = 12
     inset = 5
-    screen_box = (body_left + inset, body_top + inset,
-                  body_right - inset, body_bottom - inset - 6)
+    screen_box = (body_left + left_bezel, body_top + inset,
+                  body_right - inset, body_bottom - inset)
     rounded_rect(d, screen_box, radius=2, fill=SCREEN)
+
+    # Brushed-aluminum strip along the left edge (rM2 hallmark).
+    strip_left = body_left + 3
+    strip_right = body_left + left_bezel - 3
+    strip_top = body_top + 10
+    strip_bottom = body_bottom - 10
+    # Vertical gradient bands to suggest brushed metal.
+    bands = strip_bottom - strip_top
+    for i in range(bands):
+        t = i / max(bands - 1, 1)
+        # Smooth light→dark→light shimmer.
+        shimmer = abs(0.5 - t) * 2
+        r = int(METAL_LIGHT[0] * (1 - shimmer) + METAL_DARK[0] * shimmer)
+        g = int(METAL_LIGHT[1] * (1 - shimmer) + METAL_DARK[1] * shimmer)
+        b = int(METAL_LIGHT[2] * (1 - shimmer) + METAL_DARK[2] * shimmer)
+        d.line([(strip_left, strip_top + i), (strip_right, strip_top + i)],
+               fill=(r, g, b, 255), width=1)
 
     # Hand-written-style notes on the screen.
     sx0, sy0, sx1, sy1 = screen_box
@@ -51,9 +71,6 @@ def main():
         for fx0, fx1 in segs:
             d.line([(sx0 + sw * fx0, y), (sx0 + sw * fx1, y)],
                    fill=LINE, width=2)
-
-    # Home button indicator at bottom bezel.
-    d.ellipse((54, 110, 60, 116), fill=SCREEN)
 
     # Stylus diagonally on the right side (Marker-like).
     stylus = Image.new('RGBA', (SIZE, SIZE), BG)
