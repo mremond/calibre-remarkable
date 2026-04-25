@@ -16,7 +16,7 @@ class ReMarkableSync(InterfaceActionBase):
     description = 'Send books to reMarkable Paper Pro Move via desktop app and sync reading positions'
     supported_platforms = ['osx', 'windows', 'linux']
     author = 'Mickaël Rémond'
-    version = (0, 1, 0)
+    version = (1, 0, 0)
     minimum_calibre_version = (5, 0, 0)
     
     actual_plugin = 'calibre_plugins.remarkable_sync.ui:ReMarkableSyncAction'
