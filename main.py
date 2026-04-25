@@ -13,7 +13,9 @@ import os
 def get_book_path(db, book_id):
     """Get path to book file using Calibre's new API.
 
-    Returns (format, path) tuple. Prefers PDF over EPUB.
+    Returns (format, path) tuple. Prefers EPUB so the plugin can produce a
+    reMarkable-tuned PDF; falls back to an existing PDF only when no EPUB
+    is available.
 
     Args:
         db: Calibre database (new API)
@@ -22,16 +24,14 @@ def get_book_path(db, book_id):
     Returns:
         tuple: (format_name, file_path) or (None, None) if no suitable format
     """
-    # Try to get PDF format first
-    if db.has_format(book_id, 'PDF'):
-        fmt = db.format_abspath(book_id, 'PDF')
-        if fmt and os.path.exists(fmt):
-            return ('PDF', fmt)
-
-    # Try EPUB
     if db.has_format(book_id, 'EPUB'):
         fmt = db.format_abspath(book_id, 'EPUB')
         if fmt and os.path.exists(fmt):
             return ('EPUB', fmt)
+
+    if db.has_format(book_id, 'PDF'):
+        fmt = db.format_abspath(book_id, 'PDF')
+        if fmt and os.path.exists(fmt):
+            return ('PDF', fmt)
 
     return (None, None)
