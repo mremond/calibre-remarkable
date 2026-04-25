@@ -206,7 +206,7 @@ Users can install via **Preferences → Plugins → Load plugin from file**.
 
 ## Acknowledgments
 
-The sync approach leveraging the reMarkable Connect subscription was inspired by the [Remarcal](https://remarcal.net/) team's work.
+The sync approach — using the reMarkable desktop app as a bridge, which only requires a free reMarkable Connect account (no paid subscription) — was inspired by the [Remarcal](https://remarcal.net/) team's work.
 
 ## License
 
