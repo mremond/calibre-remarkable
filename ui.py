@@ -504,8 +504,7 @@ class ReMarkableSyncAction(InterfaceAction):
                                 'No books with PDF or EPUB format found', show=True)
 
         output_dir = QFileDialog.getExistingDirectory(
-            self.gui, 'Choose folder to save PDFs', '',
-            QFileDialog.ShowDirsOnly
+            self.gui, 'Choose folder to save PDFs', ''
         )
         if not output_dir:
             return
