@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from datetime import timezone
+
 from PyQt5.Qt import (QMenu, QIcon, QProgressDialog, QApplication, Qt,
                        QMessageBox, QThread, QFileDialog, pyqtSignal)
 
@@ -419,6 +421,8 @@ class ReMarkableSyncAction(InterfaceAction):
 
         synced_count = 0
         not_on_rm = 0
+        error_count = 0
+        error_messages = []
 
         for book_id in book_ids:
             try:
@@ -432,11 +436,16 @@ class ReMarkableSyncAction(InterfaceAction):
                     not_on_rm += 1
                     continue
 
-                # Check if existing data is more recent - skip if so
+                # Check if existing data is more recent - skip if so.
+                # doc['last_read'] is tz-aware UTC; Calibre custom-column datetimes
+                # are often naive, so normalize both to UTC-aware before comparing.
                 if col_last_read and doc['last_read']:
                     existing_date = db.field_for(col_last_read, book_id)
-                    if existing_date is not None and existing_date > doc['last_read']:
-                        continue  # Skip - existing data is more recent
+                    if existing_date is not None:
+                        if existing_date.tzinfo is None:
+                            existing_date = existing_date.replace(tzinfo=timezone.utc)
+                        if existing_date > doc['last_read']:
+                            continue  # Skip - existing data is more recent
 
                 if col_progress:
                     db.set_field(col_progress, {book_id: doc['progress']})
@@ -445,8 +454,10 @@ class ReMarkableSyncAction(InterfaceAction):
                 if col_last_read and doc['last_read']:
                     db.set_field(col_last_read, {book_id: doc['last_read']})
                 synced_count += 1
-            except Exception:
-                pass  # Continue with other books
+            except Exception as e:
+                error_count += 1
+                if len(error_messages) < 5:
+                    error_messages.append(f"book {book_id}: {e}")
 
         # Refresh the GUI to show updated values
         self.gui.library_view.model().refresh()
@@ -455,8 +466,13 @@ class ReMarkableSyncAction(InterfaceAction):
         msg = f"Synced reading positions for {synced_count} book(s)."
         if not_on_rm > 0:
             msg += f"\n\n{not_on_rm} book(s) not found on reMarkable (may have been deleted)."
+        if error_count > 0:
+            msg += f"\n\nFailed to sync {error_count} book(s):\n" + "\n".join(error_messages)
 
-        info_dialog(self.gui, 'Sync Complete', msg, show=True)
+        if error_count > 0 and synced_count == 0:
+            error_dialog(self.gui, 'Sync Failed', msg, show=True)
+        else:
+            info_dialog(self.gui, 'Sync Complete', msg, show=True)
 
     def show_settings(self):
         """Open the plugin settings dialog"""

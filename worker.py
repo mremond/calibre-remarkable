@@ -317,6 +317,22 @@ def _sanitize_filename(name):
     return cleaned or 'book'
 
 
+def _unique_pdf_path(directory, base):
+    """Return a path under *directory* for *base*.pdf that does not yet exist.
+
+    Avoids silently clobbering duplicate-titled exports or pre-existing files.
+    """
+    candidate = os.path.join(directory, f"{base}.pdf")
+    if not os.path.exists(candidate):
+        return candidate
+    i = 2
+    while True:
+        candidate = os.path.join(directory, f"{base} ({i}).pdf")
+        if not os.path.exists(candidate):
+            return candidate
+        i += 1
+
+
 def export_single_book(book, output_dir, device_type, font_family, font_size, line_height,
                        margin_left, margin_right, margin_top, margin_bottom,
                        footer_template, auto_convert):
@@ -336,7 +352,7 @@ def export_single_book(book, output_dir, device_type, font_family, font_size, li
     fmt = book['format']
     path = book['path']
 
-    output_path = os.path.join(output_dir, f"{_sanitize_filename(title)}.pdf")
+    output_path = _unique_pdf_path(output_dir, _sanitize_filename(title))
     temp_dir = None
 
     try:
