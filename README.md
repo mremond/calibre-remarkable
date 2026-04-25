@@ -2,6 +2,10 @@
 
 A Calibre plugin for synchronizing e-books with reMarkable tablets (Paper Pro Move and other models) via the reMarkable desktop app.
 
+<p align="center">
+  <img src="images/screenshots/menu.png" alt="reMarkable Sync toolbar menu in Calibre" width="280">
+</p>
+
 ## Features
 
 - Send books from Calibre library to reMarkable tablet
@@ -10,12 +14,29 @@ A Calibre plugin for synchronizing e-books with reMarkable tablets (Paper Pro Mo
 - Select destination folder on reMarkable
 - Sync reading positions back to Calibre (progress, page, last read)
 - Document naming: "Series-Number Title - Author" for easy organization
-- Cross-platform support (macOS, Windows, Linux)
+
+> **Platform support**: Developed and tested on **macOS**. The plugin
+> uses Calibre's cross-platform APIs and has code paths for Windows and
+> Linux, but those are currently **untested** — feedback welcome.
+
+## How syncing works
+
+This plugin does **not** talk to the reMarkable cloud or to the tablet
+directly. It writes books into the local storage of the **reMarkable
+desktop app**, which then uploads them to your tablet on its next sync.
+
+That means you need to:
+
+1. Have the [reMarkable desktop app](https://remarkable.com/desktop)
+   installed and logged in to your reMarkable account.
+2. **Quit and restart the reMarkable desktop app after sending books.**
+   The app only picks up new documents at startup; without a restart,
+   nothing reaches the tablet.
 
 ## Prerequisites
 
 - [Calibre](https://calibre-ebook.com/) 5.0.0 or later
-- [reMarkable desktop app](https://remarkable.com/desktop) installed and logged in
+- [reMarkable desktop app](https://remarkable.com/desktop) installed and logged in (required — see above)
 - Python 3 (bundled with Calibre)
 
 ### Optional (for PDF page counting)
@@ -87,6 +108,10 @@ Available settings:
 - PDF margins (0-50mm)
 - Sync on startup
 - Show notifications
+
+<p align="center">
+  <img src="images/screenshots/settings.png" alt="reMarkable Sync settings dialog" width="600">
+</p>
 
 ## Reading Position Sync
 
