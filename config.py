@@ -26,8 +26,6 @@ prefs.defaults['pdf_footer_template'] = '''<footer style="justify-content: end; 
    <div></div>
 <script>document.currentScript.parentNode.querySelector("div").innerHTML = "" + (_PAGENUM_ + 1) + " - " + Math.round(_PAGENUM_ * 100 / _TOTAL_PAGES_) + " % "</script>
  </footer>'''
-prefs.defaults['sync_on_startup'] = False
-prefs.defaults['show_notifications'] = True
 
 # Custom column settings for reading position sync
 prefs.defaults['col_rm_uuid'] = ''  # Column for reMarkable document UUID (required for sync)
@@ -183,16 +181,6 @@ class ConfigWidget(QWidget):
         sync_group = QGroupBox('Sync Settings')
         sync_layout = QVBoxLayout()
 
-        self.sync_on_startup = QCheckBox('Sync reading positions on Calibre startup')
-        self.sync_on_startup.setChecked(prefs['sync_on_startup'])
-        sync_layout.addWidget(self.sync_on_startup)
-
-        self.show_notifications = QCheckBox('Show sync notifications')
-        self.show_notifications.setChecked(prefs['show_notifications'])
-        sync_layout.addWidget(self.show_notifications)
-
-        # Custom column configuration
-        sync_layout.addWidget(QLabel(''))  # Spacer
         sync_layout.addWidget(QLabel('Custom columns for reading position (create in Preferences → Add your own columns):'))
 
         col_uuid_layout = QHBoxLayout()
@@ -294,8 +282,6 @@ class ConfigWidget(QWidget):
         prefs['pdf_margin_right'] = self.margin_right.value()
         prefs['pdf_margin_top'] = self.margin_top.value()
         prefs['pdf_margin_bottom'] = self.margin_bottom.value()
-        prefs['sync_on_startup'] = self.sync_on_startup.isChecked()
-        prefs['show_notifications'] = self.show_notifications.isChecked()
         prefs['col_rm_uuid'] = self.col_rm_uuid.currentData() or ''
         prefs['col_progress'] = self.col_progress.currentData() or ''
         prefs['col_page'] = self.col_page.currentData() or ''
