@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches __init__.py version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          file_version=$(grep -E "^\s*version\s*=" __init__.py \
+            | grep -oE '[0-9]+,\s*[0-9]+,\s*[0-9]+' \
+            | tr -d ' ' | tr ',' '.')
+          echo "tag=$tag file_version=$file_version"
+          if [ "$tag" != "$file_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match __init__.py version $file_version"
+            exit 1
+          fi
+
+      - name: Build plugin zip
+        run: make dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prerelease_flag=""
+          case "$GITHUB_REF_NAME" in
+            v0.*) prerelease_flag="--prerelease" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" remarkable_sync-*.zip \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            $prerelease_flag
