@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5.Qt import (QMenu, QIcon, QProgressDialog, QApplication, Qt,
-                       QMessageBox, QThread, pyqtSignal)
+                       QMessageBox, QThread, QFileDialog, pyqtSignal)
 
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2 import error_dialog, info_dialog
@@ -104,6 +104,55 @@ class SendWorkerThread(QThread):
         self.all_done.emit()
 
 
+class ExportWorkerThread(QThread):
+    """Worker thread for exporting books as PDF without blocking the UI."""
+
+    progress_update = pyqtSignal(int, str)
+    book_finished = pyqtSignal(bool, str, str)  # (success, message, output_path)
+    all_done = pyqtSignal()
+
+    def __init__(self, books, output_dir, device_type, font_family, font_size,
+                 line_height, margin_left, margin_right, margin_top, margin_bottom,
+                 footer_template, auto_convert):
+        QThread.__init__(self)
+        self.books = books
+        self.output_dir = output_dir
+        self.device_type = device_type
+        self.font_family = font_family
+        self.font_size = font_size
+        self.line_height = line_height
+        self.margin_left = margin_left
+        self.margin_right = margin_right
+        self.margin_top = margin_top
+        self.margin_bottom = margin_bottom
+        self.footer_template = footer_template
+        self.auto_convert = auto_convert
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def run(self):
+        from calibre_plugins.remarkable_sync.worker import export_single_book
+
+        for i, book in enumerate(self.books):
+            if self._cancelled:
+                break
+
+            title = book['title']
+            self.progress_update.emit(i, f"Processing ({i+1}/{len(self.books)}): {title}")
+
+            success, message, output_path = export_single_book(
+                book, self.output_dir, self.device_type, self.font_family,
+                self.font_size, self.line_height,
+                self.margin_left, self.margin_right, self.margin_top, self.margin_bottom,
+                self.footer_template, self.auto_convert,
+            )
+            self.book_finished.emit(success, message, output_path or '')
+
+        self.all_done.emit()
+
+
 class ReMarkableSyncAction(InterfaceAction):
     name = 'reMarkable Sync'
     action_spec = ('reMarkable Sync', None, 'Send books to reMarkable tablet', None)
@@ -131,6 +180,14 @@ class ReMarkableSyncAction(InterfaceAction):
         )
         send_action.triggered.connect(self.send_to_remarkable)
         self.menu.addAction(send_action)
+
+        export_action = self.create_action(
+            spec=('Export as PDF...', None,
+                  'Export selected books as reMarkable-tuned PDFs', None),
+            attr='export_action'
+        )
+        export_action.triggered.connect(self.export_as_pdf)
+        self.menu.addAction(export_action)
 
         self.menu.addSeparator()
 
@@ -177,28 +234,7 @@ class ReMarkableSyncAction(InterfaceAction):
         # Get the database
         self._db = self.gui.current_db.new_api
 
-        # Collect book info
-        books = []
-        for book_id in ids:
-            mi = self._db.get_metadata(book_id)
-            fmt, path = get_book_path(self._db, book_id)
-            if fmt and path:
-                # Format title as "Series-Number Title - Author"
-                author = mi.authors[0] if mi.authors else None
-                display_title = mi.title
-                if mi.series:
-                    idx = int(mi.series_index) if mi.series_index == int(mi.series_index) else mi.series_index
-                    display_title = f"{mi.series}-{idx} {mi.title}"
-                if author:
-                    display_title = f"{display_title} - {author}"
-
-                books.append({
-                    'book_id': book_id,
-                    'title': display_title,
-                    'author': author,
-                    'format': fmt,
-                    'path': path,
-                })
+        books = self._collect_books(ids)
 
         if not books:
             return error_dialog(self.gui, 'No valid books',
@@ -427,3 +463,115 @@ class ReMarkableSyncAction(InterfaceAction):
     def show_settings(self):
         """Open the plugin settings dialog"""
         self.interface_action_base_plugin.do_user_config(self.gui)
+
+    def _collect_books(self, ids):
+        """Build the list of book dicts consumed by the worker threads."""
+        books = []
+        for book_id in ids:
+            mi = self._db.get_metadata(book_id)
+            fmt, path = get_book_path(self._db, book_id)
+            if not (fmt and path):
+                continue
+
+            author = mi.authors[0] if mi.authors else None
+            display_title = mi.title
+            if mi.series:
+                idx = int(mi.series_index) if mi.series_index == int(mi.series_index) else mi.series_index
+                display_title = f"{mi.series}-{idx} {mi.title}"
+            if author:
+                display_title = f"{display_title} - {author}"
+
+            books.append({
+                'book_id': book_id,
+                'title': display_title,
+                'author': author,
+                'format': fmt,
+                'path': path,
+            })
+        return books
+
+    def export_as_pdf(self):
+        """Export selected books as reMarkable-tuned PDFs to a chosen folder."""
+        ids = self.gui.library_view.get_selected_ids()
+        if not ids:
+            return error_dialog(self.gui, 'No selection',
+                                'No books selected', show=True)
+
+        self._db = self.gui.current_db.new_api
+        books = self._collect_books(ids)
+        if not books:
+            return error_dialog(self.gui, 'No valid books',
+                                'No books with PDF or EPUB format found', show=True)
+
+        output_dir = QFileDialog.getExistingDirectory(
+            self.gui, 'Choose folder to save PDFs', '',
+            QFileDialog.ShowDirsOnly
+        )
+        if not output_dir:
+            return
+
+        device_type = prefs.get('device_type', 'rmpp')
+        font_family = prefs.get('pdf_font_family', '')
+        font_size = prefs.get('pdf_font_size', 12.0)
+        line_height = prefs.get('pdf_line_height', 125)
+        margin_left = prefs.get('pdf_margin_left', 15)
+        margin_right = prefs.get('pdf_margin_right', 15)
+        margin_top = prefs.get('pdf_margin_top', 45)
+        margin_bottom = prefs.get('pdf_margin_bottom', 35)
+        footer_template = prefs.get('pdf_footer_template', '')
+        auto_convert = prefs.get('auto_convert_epub', True)
+
+        self._export_success = 0
+        self._export_errors = 0
+        self._export_messages = []
+        self._export_output_dir = output_dir
+
+        self._export_progress = QProgressDialog(
+            'Exporting books as PDF...', 'Cancel', 0, len(books), self.gui
+        )
+        self._export_progress.setWindowTitle('reMarkable Sync')
+        self._export_progress.setWindowModality(Qt.WindowModal)
+        self._export_progress.setMinimumDuration(0)
+        self._export_progress.setAutoClose(False)
+        self._export_progress.setAutoReset(False)
+        self._export_progress.show()
+
+        self._export_worker = ExportWorkerThread(
+            books, output_dir, device_type, font_family, font_size, line_height,
+            margin_left, margin_right, margin_top, margin_bottom,
+            footer_template, auto_convert,
+        )
+        self._export_worker.progress_update.connect(self._on_export_progress)
+        self._export_worker.book_finished.connect(self._on_export_book_finished)
+        self._export_worker.all_done.connect(self._on_export_done)
+        self._export_progress.canceled.connect(self._export_worker.cancel)
+        self._export_worker.start()
+
+    def _on_export_progress(self, index, label_text):
+        self._export_progress.setValue(index)
+        self._export_progress.setLabelText(label_text)
+
+    def _on_export_book_finished(self, success, message, output_path):
+        if success:
+            self._export_success += 1
+        else:
+            self._export_errors += 1
+            self._export_messages.append(message)
+
+    def _on_export_done(self):
+        self._export_progress.setValue(self._export_progress.maximum())
+        self._export_progress.close()
+
+        if self._export_success > 0:
+            msg = (f"Exported {self._export_success} PDF(s) to\n"
+                   f"{self._export_output_dir}")
+            if self._export_errors > 0:
+                msg += (f"\n\nFailed to export {self._export_errors} book(s):\n"
+                        + "\n".join(self._export_messages[:5]))
+            info_dialog(self.gui, 'Export Complete', msg, show=True)
+        elif self._export_errors > 0:
+            error_dialog(
+                self.gui, 'Export Failed',
+                "No books were exported.\n\n" + "\n".join(self._export_messages[:5]),
+                show=True
+            )

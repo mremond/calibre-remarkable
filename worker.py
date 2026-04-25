@@ -307,3 +307,75 @@ def process_single_book(book, folder_uuid, device_type, font_family, font_size, 
                 shutil.rmtree(temp_dir)
             except Exception:
                 pass
+
+
+_FILENAME_FORBIDDEN = '<>:"/\\|?*'
+
+
+def _sanitize_filename(name):
+    cleaned = ''.join(c for c in name if c not in _FILENAME_FORBIDDEN).strip()
+    return cleaned or 'book'
+
+
+def export_single_book(book, output_dir, device_type, font_family, font_size, line_height,
+                       margin_left, margin_right, margin_top, margin_bottom,
+                       footer_template, auto_convert):
+    """
+    Export a single book as a reMarkable-tuned PDF into output_dir.
+
+    PDF sources are copied as-is; EPUB sources are converted using the same
+    pipeline as send_to_remarkable. Does not touch the reMarkable desktop
+    app's storage.
+
+    Returns:
+        tuple: (success, message, output_path)
+    """
+    from calibre.utils.ipc.simple_worker import fork_job
+
+    title = book['title']
+    fmt = book['format']
+    path = book['path']
+
+    output_path = os.path.join(output_dir, f"{_sanitize_filename(title)}.pdf")
+    temp_dir = None
+
+    try:
+        if fmt == 'PDF':
+            shutil.copy2(path, output_path)
+            return (True, f"Exported '{title}'", output_path)
+
+        if fmt == 'EPUB':
+            if not auto_convert:
+                return (False, f'{title}: EPUB auto-conversion disabled', None)
+
+            result = fork_job(
+                'calibre_plugins.remarkable_sync.worker',
+                'convert_epub_to_pdf',
+                args=(path, title, device_type, font_family, font_size, line_height,
+                      margin_left, margin_right, margin_top, margin_bottom,
+                      footer_template),
+                timeout=600
+            )
+
+            data = result.get('result') if result else None
+            if not data:
+                return (False, f'{title}: Conversion worker failed', None)
+            if not data['success']:
+                return (False, f'{title}: Conversion failed - {data.get("error", "Unknown error")}', None)
+
+            pdf_path = data['pdf_path']
+            temp_dir = os.path.dirname(pdf_path)
+            shutil.copy2(pdf_path, output_path)
+            return (True, f"Exported '{title}'", output_path)
+
+        return (False, f'{title}: Unsupported format {fmt}', None)
+
+    except Exception as e:
+        return (False, f'{title}: {str(e)}', None)
+
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception:
+                pass
