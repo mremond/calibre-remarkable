@@ -62,6 +62,15 @@ The plugin uses multiple fallback methods for PDF page detection. Install any of
    default folder, device type, conversion preferences, and (optionally)
    custom columns for reading-position sync.
 
+## Example output
+
+Curious what the conversion looks like before installing? See
+[`examples/the-time-machine.pdf`](examples/the-time-machine.pdf) — *The
+Time Machine* by H. G. Wells, sourced from
+[Standard Ebooks](https://standardebooks.org/ebooks/h-g-wells/the-time-machine)
+and converted with the plugin's default settings for the **reMarkable
+Paper Pro Move** (full-bleed cover, configured typography and margins).
+
 ## Development Setup
 
 ### Project Structure
