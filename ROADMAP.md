@@ -17,7 +17,6 @@
 
 ## TODO
 - [ ] Make the UUID column optional but recommended. If it does not exist, it will fallback to sync based on file name but will be less accurate.
-- [ ] Make the position sync with Calibre bidirectional so that I can update the position on a book I have read on KOreader in between reMarkable read session. Note: KOreader sync on a scale of 0-1 the percentage read.
 - [ ] Investigate running conversion as background task (ThreadedJob) without Qt crash
 - [ ] I18N
 - [ ] Make the reMarkable directory be seen like a device that can be mounted if present ? It would allow us to see which books have been uploaded already.
