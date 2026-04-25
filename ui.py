@@ -219,11 +219,6 @@ class ReMarkableSyncAction(InterfaceAction):
         if not is_installed:
             return error_dialog(self.gui, 'reMarkable App Not Found', message, show=True)
 
-        # Check if app was running (we'll restart it after sync)
-        self._app_was_running = is_remarkable_app_running()
-        if self._app_was_running:
-            stop_remarkable_app()
-
         # Get selected book IDs
         ids = self.gui.library_view.get_selected_ids()
 
@@ -239,6 +234,12 @@ class ReMarkableSyncAction(InterfaceAction):
         if not books:
             return error_dialog(self.gui, 'No valid books',
                                 'No books with PDF or EPUB format found', show=True)
+
+        # Stop the desktop app only after validation has passed; _on_all_done
+        # restarts it unconditionally so cancels and errors don't leave it closed.
+        self._app_was_running = is_remarkable_app_running()
+        if self._app_was_running:
+            stop_remarkable_app()
 
         # Get settings
         folder_uuid = prefs.get('default_folder_uuid', '')
@@ -341,8 +342,9 @@ class ReMarkableSyncAction(InterfaceAction):
         messages = self._messages
         app_was_running = self._app_was_running
 
-        # Restart reMarkable app if it was running
-        if app_was_running and success_count > 0:
+        # Always restart the desktop app if we stopped it, so cancels and
+        # error-only runs don't leave the user without their app.
+        if app_was_running:
             start_remarkable_app()
 
         # Show results
@@ -363,14 +365,10 @@ class ReMarkableSyncAction(InterfaceAction):
 
             info_dialog(self.gui, 'Success', msg, show=True)
         elif skip_count > 0 and error_count == 0:
-            if app_was_running:
-                start_remarkable_app()
             info_dialog(self.gui, 'Skipped',
                         f"Skipped {skip_count} existing book(s). No new books sent.",
                         show=True)
         elif error_count > 0:
-            if app_was_running:
-                start_remarkable_app()
             error_dialog(self.gui, 'Error',
                          f"Failed to send book(s):\n" + "\n".join(messages[:5]),
                          show=True)

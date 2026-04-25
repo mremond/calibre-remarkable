@@ -178,7 +178,7 @@ The plugin creates document files directly in the reMarkable desktop app's local
 
 | Platform | Path |
 |----------|------|
-| macOS | `~/Library/Containers/com.remarkable.desktop/Data/.local/share/remarkable/desktop/` |
+| macOS | `~/Library/Containers/com.remarkable.desktop/Data/Library/Application Support/remarkable/desktop/` |
 | Windows | `%LOCALAPPDATA%/remarkable/desktop/` |
 | Linux | `~/.local/share/remarkable/desktop/` |
 
