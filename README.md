@@ -9,7 +9,9 @@ A Calibre plugin for synchronizing e-books with reMarkable tablets (Paper Pro Mo
 ## Features
 
 - Send books from Calibre library to reMarkable tablet
-- Automatic EPUB to PDF conversion with configurable font size and margins
+- Export selected books as reMarkable-tuned PDFs to any folder (no device required)
+- Automatic EPUB to PDF conversion with configurable font, size, line height, and margins
+- Device-specific page sizes (reMarkable 2, Paper Pro, Paper Pro Move)
 - Full-bleed cover pages (no margins, optimized for e-ink display)
 - Select destination folder on reMarkable
 - Sync reading positions back to Calibre (progress, page, last read)
@@ -47,6 +49,18 @@ The plugin uses multiple fallback methods for PDF page detection. Install any of
 - `PyPDF2` Python library
 - `pikepdf` Python library
 - `qpdf` command-line tool
+
+## Installation
+
+1. Download `remarkable_sync-X.Y.Z.zip` from the
+   [latest release](https://github.com/mremond/calibre-remarkable/releases/latest).
+2. In Calibre, go to **Preferences → Plugins → Load plugin from file**
+   and select the downloaded zip.
+3. Restart Calibre. The plugin appears as **reMarkable Sync** in the
+   toolbar and under **Tools**.
+4. Open **Tools → reMarkable Sync → Settings…** to configure your
+   default folder, device type, conversion preferences, and (optionally)
+   custom columns for reading-position sync.
 
 ## Development Setup
 
@@ -102,12 +116,19 @@ Debug output appears in the terminal, useful for troubleshooting plugin issues.
 **Preferences → Plugins → User interface action → reMarkable Sync → Customize plugin**
 
 Available settings:
-- Default upload folder
-- Auto-convert EPUB to PDF
-- PDF font size (8-24pt)
-- PDF margins (0-50mm)
-- Sync on startup
-- Show notifications
+
+- **Upload Settings**
+  - Default folder on reMarkable (with pinned folders marked 📌)
+  - Device type (reMarkable 2, Paper Pro, Paper Pro Move) — controls the PDF page size
+- **PDF Conversion Settings**
+  - Auto-convert EPUB to PDF
+  - Font family (any installed system font, or system default)
+  - Base font size (px) — picked from a curated list (9–32 px)
+  - Line height (100–200 %)
+  - Page margins, in points: Left, Right, Top, Bottom (0–100 pt each)
+- **Sync Settings** (optional, for syncing reading positions back to Calibre)
+  - Custom-column mappings: reMarkable UUID, Progress (%), Current page, Last read
+  - See [Reading Position Sync](#reading-position-sync) below
 
 <p align="center">
   <img src="images/screenshots/settings.png" alt="reMarkable Sync settings dialog" width="600">
