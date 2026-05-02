@@ -64,6 +64,20 @@ html, body {{
   widows: 2;
   line-height: {line_height}%;
 }}
+html body p, html body div, html body li, html body td, html body th, html body blockquote,
+p[class], div[class], li[class] {{
+  font-size: 1em !important;
+  font-family: inherit !important;
+}}
+html body h1, html body h2, html body h3, html body h4, html body h5, html body h6,
+h1[class], h2[class], h3[class], h4[class], h5[class], h6[class],
+.footnote, .footnote *, .note, .note *, .endnote, .endnote *,
+sup, sub, small,
+.dropcap, .initial, .drop-cap,
+[class*="dropcap" i], [class*="Dropcap"], [class*="DropCap"] {{
+  font-size: revert !important;
+  font-family: revert !important;
+}}
 blockquote, .quote, .epigraph, .pullquote {{
   margin-left: 1.5em;
   margin-right: 1.5em;
