@@ -111,6 +111,9 @@ blockquote, .quote, .epigraph, .pullquote {{
             recommendations.append(('embed_font_family', font_family, HIGH))
             recommendations.append(('pdf_serif_family', font_family, HIGH))
             recommendations.append(('embed_all_fonts', True, HIGH))
+        else:
+            recommendations.append(('embed_all_fonts', False, HIGH))
+            recommendations.append(('subset_embedded_fonts', False, HIGH))
 
         if footer_template:
             recommendations.append(('pdf_footer_template', footer_template, HIGH))
