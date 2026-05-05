@@ -114,6 +114,9 @@ class ConfigWidget(QWidget):
             self.font_family.addItem(family, family)
             if family == current_font:
                 current_index = i
+        if current_font and current_font != '(System default)' and current_index == 0:
+            self.font_family.addItem(current_font, current_font)
+            current_index = self.font_family.count() - 1
         self.font_family.setCurrentIndex(current_index)
         font_family_layout.addWidget(self.font_family)
         conversion_layout.addLayout(font_family_layout)
@@ -276,7 +279,7 @@ class ConfigWidget(QWidget):
         prefs['device_type'] = self.device_type.currentData()
         prefs['auto_convert_epub'] = self.auto_convert.isChecked()
         font_text = self.font_family.currentText()
-        if self.font_family.currentIndex() == 0 or font_text == '(System default)':
+        if not font_text or font_text == '(System default)':
             prefs['pdf_font_family'] = ''
         else:
             prefs['pdf_font_family'] = font_text
