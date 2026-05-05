@@ -275,7 +275,11 @@ class ConfigWidget(QWidget):
         prefs['default_folder_name'] = self.folder_combo.currentText()
         prefs['device_type'] = self.device_type.currentData()
         prefs['auto_convert_epub'] = self.auto_convert.isChecked()
-        prefs['pdf_font_family'] = self.font_family.currentData() or self.font_family.currentText()
+        font_text = self.font_family.currentText()
+        if self.font_family.currentIndex() == 0 or font_text == '(System default)':
+            prefs['pdf_font_family'] = ''
+        else:
+            prefs['pdf_font_family'] = font_text
         prefs['pdf_font_size'] = self.font_size.currentData()
         prefs['pdf_line_height'] = self.line_height.value()
         prefs['pdf_margin_left'] = self.margin_left.value()

@@ -107,7 +107,7 @@ blockquote, .quote, .epigraph, .pullquote {{
             ('margin_bottom', margin_bottom, HIGH),
         ]
 
-        if font_family:
+        if font_family and font_family != '(System default)':
             recommendations.append(('embed_font_family', font_family, HIGH))
             recommendations.append(('pdf_serif_family', font_family, HIGH))
             recommendations.append(('embed_all_fonts', True, HIGH))
