@@ -109,33 +109,60 @@ def start_remarkable_app():
         pass
     return False
 
-def get_root_folders():
-    """Get root-level folders from reMarkable"""
+def get_all_folders():
+    """Get all (non-trashed) folders from reMarkable, with full paths.
+
+    Each entry has ``uuid``, ``name`` (leaf), ``path`` (slash-joined
+    visibleName chain from the top, e.g. "Books / Fiction"), and
+    ``pinned``. Trashed folders are excluded. Orphaned folders (parent
+    UUID points to something that's gone) appear at the top level.
+    """
     rm_path = get_remarkable_path()
-    
+
     if not rm_path.exists():
         return []
-    
-    folders = []
-    
+
+    by_uuid = {}
     for metadata_file in rm_path.glob('*.metadata'):
         try:
             with open(metadata_file) as f:
                 metadata = json.load(f)
-            
-            if (metadata.get('type') == 'CollectionType' and 
-                metadata.get('parent', '') == ''):
-                
-                uuid = metadata_file.stem
-                folders.append({
-                    'uuid': uuid,
-                    'name': metadata.get('visibleName', 'Unknown'),
-                    'pinned': metadata.get('pinned', False)
-                })
         except Exception:
             continue
-    
-    folders.sort(key=lambda x: x['name'])
+        if metadata.get('type') != 'CollectionType':
+            continue
+        if metadata.get('parent', '') == 'trash':
+            continue
+        uuid = metadata_file.stem
+        by_uuid[uuid] = {
+            'uuid': uuid,
+            'name': metadata.get('visibleName', 'Unknown'),
+            'parent': metadata.get('parent', ''),
+            'pinned': metadata.get('pinned', False),
+        }
+
+    def build_path(uuid):
+        parts = []
+        seen = set()
+        current = uuid
+        while current and current in by_uuid and current not in seen:
+            seen.add(current)
+            node = by_uuid[current]
+            parts.append(node['name'])
+            current = node['parent']
+        return list(reversed(parts))
+
+    folders = []
+    for uuid, node in by_uuid.items():
+        path_parts = build_path(uuid)
+        folders.append({
+            'uuid': uuid,
+            'name': node['name'],
+            'path': ' / '.join(path_parts),
+            'pinned': node['pinned'],
+        })
+
+    folders.sort(key=lambda x: x['path'].lower())
     return folders
 
 

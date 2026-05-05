@@ -229,23 +229,23 @@ class ConfigWidget(QWidget):
     
     def refresh_folders(self):
         """Refresh folder list from reMarkable"""
-        from calibre_plugins.remarkable_sync.remarkable import get_root_folders
-        
+        from calibre_plugins.remarkable_sync.remarkable import get_all_folders
+
         self.folder_combo.clear()
         self.folder_combo.addItem('Root', '')
-        
-        folders = get_root_folders()
+
+        folders = get_all_folders()
         current_uuid = prefs['default_folder_uuid']
         current_index = 0
-        
+
         for i, folder in enumerate(folders, 1):
             pin_marker = '📌 ' if folder.get('pinned') else ''
-            display_name = f"{pin_marker}{folder['name']}"
+            display_name = f"{pin_marker}{folder['path']}"
             self.folder_combo.addItem(display_name, folder['uuid'])
-            
+
             if folder['uuid'] == current_uuid:
                 current_index = i
-        
+
         self.folder_combo.setCurrentIndex(current_index)
     
     def populate_custom_columns(self, db):
