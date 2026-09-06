@@ -480,6 +480,10 @@ class ReMarkableSyncAction(InterfaceAction):
 
     def _collect_books(self, ids):
         """Build the list of book dicts consumed by the worker threads."""
+        from calibre.ebooks.metadata.book.formatter import SafeFormat
+        formatter = SafeFormat()
+        template = prefs.get('filename_template', '{series}{series_index:| - | }{title} - {authors}')
+
         books = []
         for book_id in ids:
             mi = self._db.get_metadata(book_id)
@@ -487,13 +491,18 @@ class ReMarkableSyncAction(InterfaceAction):
             if not (fmt and path):
                 continue
 
+            # Keep the original author variable to populate the tablet's native author tag
             author = mi.authors[0] if mi.authors else None
-            display_title = mi.title
-            if mi.series:
-                idx = int(mi.series_index) if mi.series_index == int(mi.series_index) else mi.series_index
-                display_title = f"{mi.series}-{idx} {mi.title}"
-            if author:
-                display_title = f"{display_title} - {author}"
+            
+            # Safely evaluate the user's template
+            try:
+                display_title = formatter.safe_format(template, {}, '', mi).strip()
+            except Exception:
+                display_title = ''
+                
+            # Fallback if the template evaluation fails or returns an empty string
+            if not display_title:
+                display_title = mi.title
 
             books.append({
                 'book_id': book_id,
