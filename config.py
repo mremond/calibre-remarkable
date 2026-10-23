@@ -11,6 +11,7 @@ from calibre.utils.config import JSONConfig
 prefs = JSONConfig('plugins/remarkable_sync')
 
 # Default settings
+prefs.defaults['filename_template'] = '{series}{series_index:| - | }{title} - {authors}'
 prefs.defaults['default_folder_uuid'] = ''
 prefs.defaults['default_folder_name'] = 'Root'
 prefs.defaults['device_type'] = 'rmpp'  # Default to Paper Pro
@@ -58,9 +59,24 @@ def get_device_page_size(device_type):
 class ConfigWidget(QWidget):
     
     def __init__(self):
+
         QWidget.__init__(self)
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
+        
+        # Document Naming
+        naming_group = QGroupBox('Document Naming')
+        naming_layout = QVBoxLayout()
+        
+        naming_layout.addWidget(QLabel('Document Name Template:'))
+        self.filename_template = QLineEdit()
+        self.filename_template.setText(prefs.get('filename_template', '{title}'))
+        self.filename_template.setToolTip('Uses standard Calibre template language. Example: {authors} - {title}')
+        naming_layout.addWidget(self.filename_template)
+        
+        naming_group.setLayout(naming_layout)
+        self.layout.addWidget(naming_group)
+        
         
         # Folder selection
         folder_group = QGroupBox('Upload Settings')
@@ -114,9 +130,6 @@ class ConfigWidget(QWidget):
             self.font_family.addItem(family, family)
             if family == current_font:
                 current_index = i
-        if current_font and current_font != '(System default)' and current_index == 0:
-            self.font_family.addItem(current_font, current_font)
-            current_index = self.font_family.count() - 1
         self.font_family.setCurrentIndex(current_index)
         font_family_layout.addWidget(self.font_family)
         conversion_layout.addLayout(font_family_layout)
@@ -229,23 +242,23 @@ class ConfigWidget(QWidget):
     
     def refresh_folders(self):
         """Refresh folder list from reMarkable"""
-        from calibre_plugins.remarkable_sync.remarkable import get_all_folders
-
+        from calibre_plugins.remarkable_sync.remarkable import get_root_folders
+        
         self.folder_combo.clear()
         self.folder_combo.addItem('Root', '')
-
-        folders = get_all_folders()
+        
+        folders = get_root_folders()
         current_uuid = prefs['default_folder_uuid']
         current_index = 0
-
+        
         for i, folder in enumerate(folders, 1):
             pin_marker = '📌 ' if folder.get('pinned') else ''
-            display_name = f"{pin_marker}{folder['path']}"
+            display_name = f"{pin_marker}{folder['name']}"
             self.folder_combo.addItem(display_name, folder['uuid'])
-
+            
             if folder['uuid'] == current_uuid:
                 current_index = i
-
+        
         self.folder_combo.setCurrentIndex(current_index)
     
     def populate_custom_columns(self, db):
@@ -274,15 +287,12 @@ class ConfigWidget(QWidget):
 
     def save_settings(self):
         """Save settings"""
+        prefs['filename_template'] = self.filename_template.text()
         prefs['default_folder_uuid'] = self.folder_combo.currentData()
         prefs['default_folder_name'] = self.folder_combo.currentText()
         prefs['device_type'] = self.device_type.currentData()
         prefs['auto_convert_epub'] = self.auto_convert.isChecked()
-        font_text = self.font_family.currentText()
-        if not font_text or font_text == '(System default)':
-            prefs['pdf_font_family'] = ''
-        else:
-            prefs['pdf_font_family'] = font_text
+        prefs['pdf_font_family'] = self.font_family.currentData() or self.font_family.currentText()
         prefs['pdf_font_size'] = self.font_size.currentData()
         prefs['pdf_line_height'] = self.line_height.value()
         prefs['pdf_margin_left'] = self.margin_left.value()
