@@ -12,7 +12,7 @@ from pathlib import Path
 def get_remarkable_path():
     """Get platform-specific reMarkable desktop app path"""
     if os.name == 'nt':  # Windows
-        app_data = os.getenv('LOCALAPPDATA')
+        app_data = os.getenv('APPDATA')
         return Path(app_data) / 'remarkable' / 'desktop'
     elif os.uname().sysname == 'Darwin':  # macOS
         return Path.home() / 'Library/Containers/com.remarkable.desktop/Data/Library/Application Support/remarkable/desktop'
@@ -88,7 +88,7 @@ def start_remarkable_app():
     """
     try:
         if os.name == 'nt':  # Windows
-            app_path = Path(os.getenv('LOCALAPPDATA')) / 'remarkable' / 'reMarkable.exe'
+            app_path = Path(os.getenv('APPDATA')) / 'remarkable' / 'reMarkable.exe'
             if app_path.exists():
                 subprocess.Popen([str(app_path)], start_new_session=True)
                 return True
